@@ -24,6 +24,12 @@ services:
       DB_HOST: db
     ports:
       - "3001:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      start_period: 8s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy
