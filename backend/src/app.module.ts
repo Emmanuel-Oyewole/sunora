@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
-import { DbModule } from './config/database/prisma.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { IdentityModule } from './modules/identity/index.js';
+import { AppConfigModule } from './shared/config/config.module.js';
+import { DatabaseModule } from './shared/database/database.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -15,8 +17,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       appSecret: process.env.OBSERVE_APP_SECRET ?? 'YOUR_APP_SECRET',
       serviceId: 'backend',
     }),
-    DbModule,
+    AppConfigModule,
+    DatabaseModule,
     HealthModule,
+    IdentityModule,
   ],
 })
 export class AppModule {}

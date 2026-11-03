@@ -6,5 +6,351 @@
   },
   "env": {
     "node": true
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/modules/identity/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/conversations/**",
+                  "!**/conversations/index.js",
+                  "!**/conversations/contracts/**"
+                ],
+                "message": "Module boundary: import \"conversations\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/generation/**",
+                  "!**/generation/index.js",
+                  "!**/generation/contracts/**"
+                ],
+                "message": "Module boundary: import \"generation\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/usage/**",
+                  "!**/usage/index.js",
+                  "!**/usage/contracts/**"
+                ],
+                "message": "Module boundary: import \"usage\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/notifications/**",
+                  "!**/notifications/index.js",
+                  "!**/notifications/contracts/**"
+                ],
+                "message": "Module boundary: import \"notifications\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/health/**",
+                  "!**/health/index.js",
+                  "!**/health/contracts/**"
+                ],
+                "message": "Module boundary: import \"health\" only through its index.ts or contracts/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/modules/conversations/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/identity/**",
+                  "!**/identity/index.js",
+                  "!**/identity/contracts/**"
+                ],
+                "message": "Module boundary: import \"identity\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/generation/**",
+                  "!**/generation/index.js",
+                  "!**/generation/contracts/**"
+                ],
+                "message": "Module boundary: import \"generation\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/usage/**",
+                  "!**/usage/index.js",
+                  "!**/usage/contracts/**"
+                ],
+                "message": "Module boundary: import \"usage\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/notifications/**",
+                  "!**/notifications/index.js",
+                  "!**/notifications/contracts/**"
+                ],
+                "message": "Module boundary: import \"notifications\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/health/**",
+                  "!**/health/index.js",
+                  "!**/health/contracts/**"
+                ],
+                "message": "Module boundary: import \"health\" only through its index.ts or contracts/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/modules/generation/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/identity/**",
+                  "!**/identity/index.js",
+                  "!**/identity/contracts/**"
+                ],
+                "message": "Module boundary: import \"identity\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/conversations/**",
+                  "!**/conversations/index.js",
+                  "!**/conversations/contracts/**"
+                ],
+                "message": "Module boundary: import \"conversations\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/usage/**",
+                  "!**/usage/index.js",
+                  "!**/usage/contracts/**"
+                ],
+                "message": "Module boundary: import \"usage\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/notifications/**",
+                  "!**/notifications/index.js",
+                  "!**/notifications/contracts/**"
+                ],
+                "message": "Module boundary: import \"notifications\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/health/**",
+                  "!**/health/index.js",
+                  "!**/health/contracts/**"
+                ],
+                "message": "Module boundary: import \"health\" only through its index.ts or contracts/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/modules/usage/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/identity/**",
+                  "!**/identity/index.js",
+                  "!**/identity/contracts/**"
+                ],
+                "message": "Module boundary: import \"identity\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/conversations/**",
+                  "!**/conversations/index.js",
+                  "!**/conversations/contracts/**"
+                ],
+                "message": "Module boundary: import \"conversations\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/generation/**",
+                  "!**/generation/index.js",
+                  "!**/generation/contracts/**"
+                ],
+                "message": "Module boundary: import \"generation\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/notifications/**",
+                  "!**/notifications/index.js",
+                  "!**/notifications/contracts/**"
+                ],
+                "message": "Module boundary: import \"notifications\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/health/**",
+                  "!**/health/index.js",
+                  "!**/health/contracts/**"
+                ],
+                "message": "Module boundary: import \"health\" only through its index.ts or contracts/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/modules/notifications/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/identity/**",
+                  "!**/identity/index.js",
+                  "!**/identity/contracts/**"
+                ],
+                "message": "Module boundary: import \"identity\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/conversations/**",
+                  "!**/conversations/index.js",
+                  "!**/conversations/contracts/**"
+                ],
+                "message": "Module boundary: import \"conversations\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/generation/**",
+                  "!**/generation/index.js",
+                  "!**/generation/contracts/**"
+                ],
+                "message": "Module boundary: import \"generation\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/usage/**",
+                  "!**/usage/index.js",
+                  "!**/usage/contracts/**"
+                ],
+                "message": "Module boundary: import \"usage\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/health/**",
+                  "!**/health/index.js",
+                  "!**/health/contracts/**"
+                ],
+                "message": "Module boundary: import \"health\" only through its index.ts or contracts/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/modules/health/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/identity/**",
+                  "!**/identity/index.js",
+                  "!**/identity/contracts/**"
+                ],
+                "message": "Module boundary: import \"identity\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/conversations/**",
+                  "!**/conversations/index.js",
+                  "!**/conversations/contracts/**"
+                ],
+                "message": "Module boundary: import \"conversations\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/generation/**",
+                  "!**/generation/index.js",
+                  "!**/generation/contracts/**"
+                ],
+                "message": "Module boundary: import \"generation\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/usage/**",
+                  "!**/usage/index.js",
+                  "!**/usage/contracts/**"
+                ],
+                "message": "Module boundary: import \"usage\" only through its index.ts or contracts/."
+              },
+              {
+                "group": [
+                  "**/notifications/**",
+                  "!**/notifications/index.js",
+                  "!**/notifications/contracts/**"
+                ],
+                "message": "Module boundary: import \"notifications\" only through its index.ts or contracts/."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/shared/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/modules/**"
+                ],
+                "message": "shared/ is the kernel and must not import feature modules."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
