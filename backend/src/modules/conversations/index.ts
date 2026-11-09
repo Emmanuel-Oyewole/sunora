@@ -1,3 +1,2 @@
-// Public surface of the conversations module. Other modules may import only from this
-// file (see .oxlintrc.json).
+// Public API of the conversations module. Other modules import only from here.
 export { ConversationsModule } from './conversations.module.js';

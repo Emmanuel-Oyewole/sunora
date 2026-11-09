@@ -1,0 +1,185 @@
+// Sunora database schema. Design and rationale: .resource/database-design.md (SUNORA-DB-001).
+//
+// One PostgreSQL schema per module. There are NO relations across schemas:
+// cross-module references are plain uuid columns ("logical references") so a
+// module can be split into its own database later without untangling.
+//
+// Only the identity module exists so far. The other module schemas
+// (conversations, generation, usage, notifications) are designed in
+// database-design.md and are added to the `schemas` list below when their
+// modules are built.
+//
+// Some constraints Prisma cannot express (CHECK constraints, partial-index
+// predicates, the lower(email) unique index) are added by hand in the
+// migration SQL. Partial indexes are still declared here under the same name so
+// Prisma does not report drift. See DB-001 section 9 and the migration.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["identity"]
+}
+
+// =============================================================================
+// identity
+// =============================================================================
+
+enum Role {
+  USER
+  ADMIN
+
+  @@schema("identity")
+}
+
+enum SessionRevokedReason {
+  LOGOUT
+  LOGOUT_ALL
+  REUSE_DETECTED // a rotated refresh token was replayed outside the grace window
+  PASSWORD_RESET
+  PASSWORD_CHANGED
+  ADMIN
+
+  @@schema("identity")
+}
+
+enum UserTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+
+  @@schema("identity")
+}
+
+enum AuthEventType {
+  REGISTER
+  REGISTRATION_EXISTING_EMAIL // someone tried to register an email that already has an account
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REFRESH
+  REFRESH_REUSE_DETECTED
+  SESSION_REVOKED
+  EMAIL_VERIFICATION_REQUESTED
+  EMAIL_VERIFIED
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+
+  @@schema("identity")
+}
+
+model User {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  email             String    @unique // stored lowercase; a lower(email) unique index backs this up in SQL
+  passwordHash      String    @map("password_hash") // argon2id
+  name              String
+  role              Role      @default(USER)
+  emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamptz(3)
+  passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz(3)
+  disabledAt        DateTime? @map("disabled_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions   Session[]
+  userTokens UserToken[]
+  authEvents AuthEvent[]
+
+  @@map("users")
+  @@schema("identity")
+}
+
+// One row per login (one browser or device). Access JWTs carry its id as the
+// `sid` claim. The session is checked when a refresh token is used, not on
+// every request, so an issued access token stays valid until it expires.
+model Session {
+  id            String                @id @default(uuid(7)) @db.Uuid
+  userId        String                @map("user_id") @db.Uuid
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt    DateTime              @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  expiresAt     DateTime              @map("expires_at") @db.Timestamptz(3) // absolute lifetime cap; refresh cannot extend past it
+  revokedAt     DateTime?             @map("revoked_at") @db.Timestamptz(3)
+  revokedReason SessionRevokedReason? @map("revoked_reason")
+  userAgent     String?               @map("user_agent")
+  ip            String?               @db.Inet
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  // Partial in SQL: WHERE revoked_at IS NULL. Lists and revokes a user's active sessions.
+  @@index([userId], map: "sessions_active_user_idx")
+  @@index([expiresAt])
+  @@map("sessions")
+  @@schema("identity")
+}
+
+// Rotating refresh tokens. Each use creates a child (parentId = the token that
+// was presented). A parent can have more than one child because a replay inside
+// the grace window (two tabs refreshing at once) is tolerated; a replay outside
+// it revokes the session.
+model RefreshToken {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  parentId  String?   @map("parent_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") // SHA-256 of the raw token; the raw token is never stored
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3) // sliding, never later than the session's expiresAt
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3) // set when rotated
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  session  Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  parent   RefreshToken?  @relation("RefreshTokenLineage", fields: [parentId], references: [id], onDelete: SetNull)
+  children RefreshToken[] @relation("RefreshTokenLineage")
+
+  @@index([sessionId])
+  @@index([parentId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+  @@schema("identity")
+}
+
+// One-time tokens emailed to the user (verify address, reset password).
+// Only the SHA-256 hash is stored.
+model UserToken {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  purpose     UserTokenPurpose
+  tokenHash   String           @unique @map("token_hash")
+  email       String // address the token was issued for; a verification link is only valid while it still equals users.email
+  expiresAt   DateTime         @map("expires_at") @db.Timestamptz(3)
+  usedAt      DateTime?        @map("used_at") @db.Timestamptz(3)
+  revokedAt   DateTime?        @map("revoked_at") @db.Timestamptz(3) // superseded by a newer token of the same purpose
+  requestedIp String?          @map("requested_ip") @db.Inet
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Partial unique in SQL: WHERE used_at IS NULL AND revoked_at IS NULL, so a
+  // user has at most ONE active token per purpose. Declared unique here only so
+  // Prisma sees the same index; never use it as a lookup key.
+  @@unique([userId, purpose], map: "user_tokens_one_active_key")
+  // Serves the resend cooldown: latest token per user and purpose.
+  @@index([userId, purpose, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("user_tokens")
+  @@schema("identity")
+}
+
+// Append-only security audit log. Never store tokens or passwords in metadata.
+model AuthEvent {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  userId    String?       @map("user_id") @db.Uuid // null for failed logins on unknown emails
+  sessionId String?       @map("session_id") @db.Uuid // plain id, no FK: audit rows must outlive purged sessions
+  type      AuthEventType
+  ip        String?       @db.Inet
+  userAgent String?       @map("user_agent")
+  metadata  Json?
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("auth_events")
+  @@schema("identity")
+}

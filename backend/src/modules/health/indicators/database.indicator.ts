@@ -22,11 +22,7 @@ export class DatabaseHealthIndicator {
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * Reports the database as up only if a round trip completes within the
-   * timeout. The response carries a coarse reason; the real error is logged,
-   * never returned to the caller.
-   */
+  /** Up only if a round trip finishes within the timeout. Real errors are logged, not returned. */
   async isHealthy(
     key: string,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,

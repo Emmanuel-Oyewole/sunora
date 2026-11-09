@@ -1,33 +1,44 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '../../generated/prisma/client.js';
+import type { User } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../shared/database/prisma.service.js';
+import type { DbTransaction } from '../../shared/database/unit-of-work.js';
 
 @Injectable()
 export class UserRepository {
   constructor(private readonly prisma: PrismaService) {}
-  create(data: {
-    email: string;
-    name: string;
-    passwordHash: string;
-  }): Promise<User> {
-    return this.prisma.user.create({ data });
+
+  private db(tx?: DbTransaction): DbTransaction {
+    return tx ?? this.prisma;
   }
-  findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { id } });
+
+  create(
+    data: { email: string; name: string; passwordHash: string },
+    tx?: DbTransaction,
+  ): Promise<User> {
+    return this.db(tx).user.create({ data });
   }
-  findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { email } });
+
+  findById(id: string, tx?: DbTransaction): Promise<User | null> {
+    return this.db(tx).user.findUnique({ where: { id } });
   }
-  updatePasswordHash(id: string, passwordHash: string): Promise<User> {
-    return this.prisma.user.update({
+
+  findByEmail(email: string, tx?: DbTransaction): Promise<User | null> {
+    return this.db(tx).user.findUnique({ where: { email } });
+  }
+
+  updatePassword(
+    id: string,
+    passwordHash: string,
+    changedAt: Date,
+    tx?: DbTransaction,
+  ): Promise<User> {
+    return this.db(tx).user.update({
       where: { id },
-      data: { passwordHash },
+      data: { passwordHash, passwordChangedAt: changedAt },
     });
   }
-  markEmailVerified(id: string): Promise<User> {
-    return this.prisma.user.update({
-      where: { id },
-      data: { emailVerifiedAt: new Date() },
-    });
+
+  markEmailVerified(id: string, at: Date, tx?: DbTransaction): Promise<User> {
+    return this.db(tx).user.update({ where: { id }, data: { emailVerifiedAt: at } });
   }
 }

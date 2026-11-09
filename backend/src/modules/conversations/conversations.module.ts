@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-// Conversations, messages, the message tree and titles.
-// Not registered in AppModule until it has behaviour.
+// Conversations, messages and titles. Not in AppModule yet.
 @Module({})
 export class ConversationsModule {}
