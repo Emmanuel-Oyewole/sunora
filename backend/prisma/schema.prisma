@@ -1,19 +1,3 @@
-// Sunora database schema. Design and rationale: .resource/database-design.md (SUNORA-DB-001).
-//
-// One PostgreSQL schema per module. There are NO relations across schemas:
-// cross-module references are plain uuid columns ("logical references") so a
-// module can be split into its own database later without untangling.
-//
-// Only the identity module exists so far. The other module schemas
-// (conversations, generation, usage, notifications) are designed in
-// database-design.md and are added to the `schemas` list below when their
-// modules are built.
-//
-// Some constraints Prisma cannot express (CHECK constraints, partial-index
-// predicates, the lower(email) unique index) are added by hand in the
-// migration SQL. Partial indexes are still declared here under the same name so
-// Prisma does not report drift. See DB-001 section 9 and the migration.
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -21,13 +5,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["identity"]
+  schemas  = ["identity", "conversations", "generation"]
 }
 
-// =============================================================================
 // identity
-// =============================================================================
-
 enum Role {
   USER
   ADMIN
@@ -182,4 +163,167 @@ model AuthEvent {
   @@index([type, createdAt])
   @@map("auth_events")
   @@schema("identity")
+}
+
+// conversations
+enum TitleSource {
+  DEFAULT
+  GENERATED
+  MANUAL
+
+  @@schema("conversations")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+
+  @@schema("conversations")
+}
+
+// What the user sees as chat history. A conversation is created by its first message.
+model Conversation {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  ownerId       String      @map("owner_id") @db.Uuid // logical ref to identity.users, no FK across schemas
+  title         String?
+  titleSource   TitleSource @default(DEFAULT) @map("title_source")
+  activeLeafId  String?     @map("active_leaf_id") @db.Uuid // the last message of the branch being shown
+  lastMessageAt DateTime    @default(now()) @map("last_message_at") @db.Timestamptz(3)
+  deletedAt     DateTime?   @map("deleted_at") @db.Timestamptz(3)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  messages   Message[]
+  activeLeaf Message?  @relation("ActiveLeaf", fields: [activeLeafId], references: [id], onDelete: SetNull)
+
+  // Partial in SQL: WHERE deleted_at IS NULL. Serves the history list (keyset pagination).
+  @@index([ownerId, lastMessageAt(sort: Desc), id(sort: Desc)], map: "conversations_history_idx")
+  @@map("conversations")
+  @@schema("conversations")
+}
+
+// A node in the conversation tree. Immutable: written once, complete. Partial or
+// failed answers never live here. Editing a prompt or regenerating adds a sibling.
+model Message {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  conversationId String      @map("conversation_id") @db.Uuid
+  parentId       String?     @map("parent_id") @db.Uuid // null for a root; there can be several roots
+  role           MessageRole
+  content        String
+  reasoning      String? // assistant only: the model's reasoning, shown collapsed
+  depth          Int // root = 0, derived from the parent when inserting
+  generationId   String?     @map("generation_id") @db.Uuid // logical ref, assistant only
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  // The parent must be in the same conversation, so a crafted request cannot graft trees together.
+  parent       Message?       @relation("MessageTree", fields: [conversationId, parentId], references: [conversationId, id], onDelete: NoAction, onUpdate: NoAction)
+  children     Message[]      @relation("MessageTree")
+  leafOf       Conversation[] @relation("ActiveLeaf")
+
+  @@unique([conversationId, id])
+  @@index([conversationId, parentId])
+  @@map("messages")
+  @@schema("conversations")
+}
+
+// generation
+enum GenerationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  INTERRUPTED
+
+  @@schema("generation")
+}
+
+enum GenerationTrigger {
+  INITIAL
+  RETRY
+  REGENERATE
+
+  @@schema("generation")
+}
+
+enum ChunkKind {
+  TEXT
+  REASONING
+
+  @@schema("generation")
+}
+
+// One row per attempt to produce an answer. A retry or regenerate adds a row for
+// the same user message; nothing is ever overwritten. The ids of other modules'
+// rows are logical references (no foreign keys across schemas).
+model Generation {
+  id                 String            @id @default(uuid(7)) @db.Uuid
+  userId             String            @map("user_id") @db.Uuid
+  conversationId     String            @map("conversation_id") @db.Uuid
+  userMessageId      String            @map("user_message_id") @db.Uuid // the prompt being answered
+  assistantMessageId String?           @map("assistant_message_id") @db.Uuid // set when the answer is saved
+  attemptNumber      Int               @map("attempt_number")
+  trigger            GenerationTrigger
+  status             GenerationStatus  @default(PENDING)
+  thinking           Boolean           @default(false)
+  provider           String
+  model              String
+  finishReason       String?           @map("finish_reason")
+  ownerInstanceId    String?           @map("owner_instance_id") // the process running it, for restart detection
+  heartbeatAt        DateTime?         @map("heartbeat_at") @db.Timestamptz(3)
+  cancelRequestedAt  DateTime?         @map("cancel_requested_at") @db.Timestamptz(3)
+  errorCode          String?           @map("error_code") // a stable code, never provider text
+  startedAt          DateTime?         @map("started_at") @db.Timestamptz(3)
+  finishedAt         DateTime?         @map("finished_at") @db.Timestamptz(3)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  chunks          GenerationChunk[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@unique([userMessageId, attemptNumber])
+  @@index([userId, conversationId, createdAt(sort: Desc)])
+  // Partial in SQL: WHERE status IN ('PENDING', 'RUNNING'). Serves the restart sweep.
+  @@index([status, heartbeatAt], map: "generations_active_sweep_idx")
+  // Partial in SQL: WHERE status IN ('PENDING', 'RUNNING'). Counts a user's active generations.
+  @@index([userId], map: "generations_active_user_idx")
+  @@map("generations")
+  @@schema("generation")
+}
+
+// The recovery log: a fragment of an answer that is being produced. `seq` is also
+// the SSE event id, so a reconnecting browser asks for everything after the last one it saw.
+model GenerationChunk {
+  generationId String    @map("generation_id") @db.Uuid
+  seq          Int
+  kind         ChunkKind @default(TEXT)
+  text         String
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  @@id([generationId, seq])
+  @@map("generation_chunks")
+  @@schema("generation")
+}
+
+// Makes a submit safe to repeat: the same key and body gives the same result.
+model IdempotencyKey {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  key            String
+  requestHash    String   @map("request_hash")
+  conversationId String?  @map("conversation_id") @db.Uuid // with messageId, lets a retry finish a submit that stopped half way
+  messageId      String?  @map("message_id") @db.Uuid
+  generationId   String?  @map("generation_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3) // also reset when a stale claim is taken over
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(3)
+
+  generation Generation? @relation(fields: [generationId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+  @@schema("generation")
 }

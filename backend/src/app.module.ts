@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { createObserveModule } from '@nestjs/observe';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ConversationsModule } from './modules/conversations/index.js';
+import { GenerationModule } from './modules/generation/index.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { IdentityModule, JwtAuthGuard } from './modules/identity/index.js';
 import { AppConfigModule } from './shared/config/config.module.js';
@@ -27,6 +29,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     DatabaseModule,
     HealthModule,
     IdentityModule,
+    ConversationsModule,
+    GenerationModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

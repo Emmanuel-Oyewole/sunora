@@ -28,6 +28,22 @@ export interface AppEnv {
     readonly resendCooldownSeconds: number;
     readonly cookieSecure: boolean;
   };
+  readonly ai: {
+    readonly deepseek: {
+      /** Never log it. */
+      readonly apiKey: string;
+      readonly baseUrl: string;
+      readonly model: string;
+    };
+  };
+  readonly generation: {
+    /** Cap on one answer when thinking is off. */
+    readonly maxOutputTokens: number;
+    /** Cap when thinking is on. Reasoning counts against it, so it is larger. */
+    readonly maxOutputTokensThinking: number;
+    /** How much conversation history (in characters, about 4 per token) is sent to the model. */
+    readonly contextCharBudget: number;
+  };
   readonly email: {
     readonly provider: EmailProviderName;
     readonly brevo?: {
@@ -42,6 +58,8 @@ export interface AppEnv {
 const NODE_ENVS: readonly NodeEnv[] = ['development', 'test', 'production'];
 const EMAIL_PROVIDERS: readonly EmailProviderName[] = ['console', 'brevo'];
 const DEFAULT_PORT = 3000;
+const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
+const DEFAULT_DEEPSEEK_MODEL = 'deepseek-flash';
 const MIN_JWT_SECRET_LENGTH = 32;
 
 /**
@@ -122,6 +140,18 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     cookieSecure: nodeEnv === 'production',
   };
 
+  const deepseek = {
+    apiKey: required('DEEPSEEK_API_KEY'),
+    baseUrl: parseHttpUrl('DEEPSEEK_BASE_URL', text('DEEPSEEK_BASE_URL') ?? DEFAULT_DEEPSEEK_BASE_URL, errors),
+    model: text('DEEPSEEK_MODEL') ?? DEFAULT_DEEPSEEK_MODEL,
+  };
+
+  const generation = {
+    maxOutputTokens: integer('GENERATION_MAX_OUTPUT_TOKENS', 4096, 256, 65536),
+    maxOutputTokensThinking: integer('GENERATION_MAX_OUTPUT_TOKENS_THINKING', 16384, 256, 131072),
+    contextCharBudget: integer('GENERATION_CONTEXT_CHAR_BUDGET', 60_000, 2000, 1_000_000),
+  };
+
   const emailProvider = oneOf('EMAIL_PROVIDER', EMAIL_PROVIDERS, 'console');
   if (emailProvider === 'console' && nodeEnv === 'production') {
     errors.push('EMAIL_PROVIDER=console is not allowed when NODE_ENV=production');
@@ -154,6 +184,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       }),
     },
     auth,
+    ai: { deepseek },
+    generation,
     email: { provider: emailProvider, brevo },
   };
 }
@@ -163,6 +195,17 @@ function parseOrigin(key: string, value: string, errors: string[]): string {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
     return url.origin;
+  } catch {
+    errors.push(`${key} must be an http(s) URL`);
+    return '';
+  }
+}
+
+function parseHttpUrl(key: string, value: string, errors: string[]): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
+    return url.toString().replace(/\/$/, '');
   } catch {
     errors.push(`${key} must be an http(s) URL`);
     return '';

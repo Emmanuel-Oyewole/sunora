@@ -9,6 +9,7 @@ const source = {
   DB_HOST: 'h',
   DB_PORT: '5432',
   JWT_SECRET: 'a-test-secret-that-is-at-least-32-chars-long',
+  DEEPSEEK_API_KEY: 'sk-test',
   WEB_URL: 'http://localhost:3000',
 };
 const env = loadEnv(source);
