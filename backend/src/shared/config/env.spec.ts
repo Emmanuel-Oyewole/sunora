@@ -7,6 +7,7 @@ const validSource = {
   DB_HOST: 'localhost',
   DB_PORT: '5432',
   JWT_SECRET: 'a-test-secret-that-is-at-least-32-chars-long',
+  DEEPSEEK_API_KEY: 'sk-test',
 };
 
 describe('loadEnv', () => {
@@ -118,6 +119,62 @@ describe('loadEnv', () => {
         senderEmail: 'no-reply@sunora.app',
         senderName: 'Sunora',
       });
+    });
+  });
+
+  describe('AI settings', () => {
+    it('requires the DeepSeek API key', () => {
+      const { DEEPSEEK_API_KEY: _omitted, ...withoutKey } = validSource;
+      expect(() => loadEnv(withoutKey)).toThrowError(/DEEPSEEK_API_KEY is required/);
+    });
+
+    it('applies the default base URL and model', () => {
+      expect(loadEnv(validSource).ai.deepseek).toEqual({
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.deepseek.com',
+        model: 'deepseek-flash',
+      });
+    });
+
+    it('accepts overrides and rejects a non-http base URL', () => {
+      const env = loadEnv({
+        ...validSource,
+        DEEPSEEK_BASE_URL: 'https://proxy.example.com/v1/',
+        DEEPSEEK_MODEL: 'deepseek-v4-pro',
+      });
+      expect(env.ai.deepseek.baseUrl).toBe('https://proxy.example.com/v1');
+      expect(env.ai.deepseek.model).toBe('deepseek-v4-pro');
+      expect(() => loadEnv({ ...validSource, DEEPSEEK_BASE_URL: 'ftp://x' })).toThrowError(
+        /DEEPSEEK_BASE_URL must be an http\(s\) URL/,
+      );
+    });
+
+    it('never puts the key in an error message', () => {
+      try {
+        loadEnv({ ...validSource, DEEPSEEK_BASE_URL: 'nope' });
+      } catch (error) {
+        expect((error as Error).message).not.toContain('sk-test');
+      }
+    });
+  });
+
+  describe('generation settings', () => {
+    it('applies defaults', () => {
+      expect(loadEnv(validSource).generation).toEqual({
+        maxOutputTokens: 4096,
+        maxOutputTokensThinking: 16384,
+        contextCharBudget: 60_000,
+      });
+    });
+
+    it('accepts overrides and rejects out-of-range values', () => {
+      expect(loadEnv({ ...validSource, GENERATION_MAX_OUTPUT_TOKENS: '1024' }).generation.maxOutputTokens).toBe(1024);
+      expect(() => loadEnv({ ...validSource, GENERATION_MAX_OUTPUT_TOKENS: '10' })).toThrowError(
+        /GENERATION_MAX_OUTPUT_TOKENS must be an integer between/,
+      );
+      expect(() => loadEnv({ ...validSource, GENERATION_CONTEXT_CHAR_BUDGET: 'lots' })).toThrowError(
+        /GENERATION_CONTEXT_CHAR_BUDGET must be an integer between/,
+      );
     });
   });
 });
